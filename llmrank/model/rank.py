@@ -45,16 +45,16 @@ class Rank(SequentialRecommender):
         self.knn_model.fit(self.compute_user_embeddings())
 
     def compute_user_embeddings(self):
-    """
-    Compute user embeddings based on interaction data.
-    For simplicity, let's use item-based collaborative filtering.
-    """
-    interaction_matrix = self.build_interaction_matrix()
+        """
+        Compute user embeddings based on interaction data.
+        For simplicity, let's use item-based collaborative filtering.
+        """
+        interaction_matrix = self.build_interaction_matrix()
 
-    # Compute user embeddings using item-based collaborative filtering
-    user_embeddings = 1 - pairwise_distances(interaction_matrix, metric='cosine')
+        # Compute user embeddings using item-based collaborative filtering
+        user_embeddings = 1 - pairwise_distances(interaction_matrix, metric='cosine')
 
-    return user_embeddings
+        return user_embeddings
 
     def build_interaction_matrix(self):
         """
