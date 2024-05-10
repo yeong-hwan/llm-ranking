@@ -9,6 +9,7 @@ import pylcs
 import html
 import replicate
 from recbole.model.abstract_recommender import SequentialRecommender
+from sklearn.neighbors import NearestNeighbors
 
 from utils import dispatch_openai_requests, dispatch_single_openai_requests
 
@@ -33,11 +34,52 @@ class Rank(SequentialRecommender):
         self.dataset_name = dataset.dataset_name
         self.id_token = dataset.field2id_token['item_id']
         self.item_text = self.load_text()
-        self.interaction_data = self.load_interaction_data()
+        self.interaction_data = self.load_interaction_data()  # added
 
         self.logger.info(f'Avg. t = {np.mean([len(_) for _ in self.item_text])}')
 
         self.fake_fn = torch.nn.Linear(1, 1)
+
+        # Build kNN model
+        self.knn_model = NearestNeighbors(n_neighbors=10, metric='cosine')
+        self.knn_model.fit(self.compute_user_embeddings())
+
+    def compute_user_embeddings(self):
+    """
+    Compute user embeddings based on interaction data.
+    For simplicity, let's use item-based collaborative filtering.
+    """
+    interaction_matrix = self.build_interaction_matrix()
+
+    # Compute user embeddings using item-based collaborative filtering
+    user_embeddings = 1 - pairwise_distances(interaction_matrix, metric='cosine')
+
+    return user_embeddings
+
+    def build_interaction_matrix(self):
+        """
+        Build interaction matrix from interaction data.
+        """
+        interaction_matrix = np.zeros((len(self.interaction_data), len(self.item_text)))
+
+        for i, (_, interactions) in enumerate(self.interaction_data.items()):
+            for item_id, _, _ in interactions:
+                interaction_matrix[i, item_id] = 1  # Set interaction indicator to 1
+
+        return interaction_matrix
+
+    def find_similar_users(self, user_id):
+        """
+        Find k most similar users to the given user_id.
+        """
+        user_idx = list(self.interaction_data.keys()).index(user_id)
+        similar_users_idx = self.knn_model.kneighbors([self.knn_model.embedding_[user_idx]], return_distance=False)[0]
+
+        similar_users = [list(self.interaction_data.keys())[idx] for idx in similar_users_idx]
+
+        return similar_users
+
+
 
     def load_interaction_data(self):
         interaction_data = None
@@ -54,9 +96,31 @@ class Rank(SequentialRecommender):
         return interaction_data
 
     def load_ml_1m_interaction_data(self, inter_path):
-        # Implement loading ml-1m interaction data
-        pass
+        interaction_data = {}  # Initialize an empty dictionary to store interaction data
 
+        with open(inter_path, 'r', encoding='utf-8') as file:
+            file.readline()  # Skip the header
+            for line in file:
+                user_id, item_id, rating, timestamp = line.strip().split('\t')
+                user_id = int(user_id)
+                item_id = int(item_id)
+                rating = float(rating)
+                timestamp = int(timestamp)
+
+                # Check if the user_id already exists in the dictionary
+                if user_id in interaction_data:
+                    interaction_data[user_id].append((item_id, rating, timestamp))
+                else:
+                    interaction_data[user_id] = [(item_id, rating, timestamp)]
+
+        # Keep only the most recent interactions for each user
+        for user_id, interactions in interaction_data.items():
+            # Sort interactions based on timestamp in descending order (most recent first)
+            interactions.sort(key=lambda x: x[2], reverse=True)
+            # Keep only the most recent interactions (e.g., last 5 interactions)
+            interaction_data[user_id] = interactions[:5]
+
+        return interaction_data
 
 
     def load_text(self):
