@@ -1,3 +1,6 @@
+# Poster Overview
+![](assets/poster.png)
+
 # LLMRank
 
 **LLMRank** aims to investigate the capacity of LLMs that act as the ranking model for recommender systems. [[paper]](https://arxiv.org/abs/2305.08845)
